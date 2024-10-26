@@ -1,6 +1,14 @@
 import socket
 import threading
 import time
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from Cryptodome.Cipher import AES
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+import os, hashlib
 
 # Configuration
 MY_PORT = 65432         # My listening port
@@ -43,6 +51,11 @@ def listen_for_messages(conn, my_identity, peer_identity):
             except socket.timeout:
                 continue  # No message received, continue listening
 
+def send_message(conn, my_identity, peer_identity, message):
+    conn.sendall(message.encode('utf-8'))
+    print(f"{my_identity}: Send a message to {peer_identity}: \"{message}\" ")
+
+
 def initiate_key_exchange(conn, my_identity, peer_identity):
     """Handle initiating a key exchange when the user presses 'Y'."""
     global awaiting_response
@@ -50,8 +63,7 @@ def initiate_key_exchange(conn, my_identity, peer_identity):
     
     # Send a message to the peer
     message = f"Hey {peer_identity}, this is {my_identity}"
-    conn.sendall(message.encode('utf-8'))
-    print(f"{my_identity}: Send a message to {peer_identity}: \"{message}\" ")
+    send_message(conn, my_identity, peer_identity, message)
 
     try:
         # Wait for response from the peer
@@ -61,6 +73,7 @@ def initiate_key_exchange(conn, my_identity, peer_identity):
         
         decoded_data = data.decode()
         print(f"{my_identity}: Receive a message from {peer_identity}: \"{decoded_data}\" ")
+        
 
     except (ConnectionResetError, BrokenPipeError, ConnectionLostError) as e:
         print(f"{my_identity}: Connection lost during initiation. Attempting to reconnect...")
@@ -68,12 +81,20 @@ def initiate_key_exchange(conn, my_identity, peer_identity):
     except Exception as e:
         print(f"{my_identity}: Error - {e}, as initiator")
     finally:
-        awaiting_response = False  # Reset flag after completing the session
+        awaiting_response = False
+        return   decoded_data# Reset flag after completing the session
+
+def generate_ecdh_key_pair():
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    public_key = private_key.public_key()
+    return private_key, public_key
 
 def alice():
 
     my_identity = "Alice"
     peer_identity = "Bob"
+    sk, pk = generate_ecdh_key_pair()
+    shared_key = None
     while True:
         try:
             # Create a listening socket
@@ -106,9 +127,13 @@ def alice():
             listener_thread.start()
             
             while listener_thread.is_alive():
-                proceed = input(f"{my_identity}: Press 'Y' and Enter to initiate a session, or just wait to listen: \n").strip().upper()
+                proceed = input(f"{my_identity}: Press 'Y' and Enter to initiate a session or just send a message: \n").strip().upper()
                 if proceed == "Y":
-                    initiate_key_exchange(conn_to_peer, my_identity, peer_identity)
+                    pk_b = initiate_key_exchange(conn_to_peer, my_identity, peer_identity,pk)
+                    shared_key = sk.exchange(ec.ECDH(), pk_b)
+                    print(shared_key)
+                else:
+                    send_message(conn_to_peer, my_identity, peer_identity, proceed)
 
             print("Alice: Connection lost. Restarting connection...")
         except ConnectionLostError:
