@@ -10,4 +10,3 @@
 - [TLS Handshake](./task2/L3/TLS_handshake.py) | TSL handshake between a client and a server
 ### [task 3](./task3/)
 
-###  _Author: Nikita P._
