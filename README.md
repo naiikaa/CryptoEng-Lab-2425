@@ -7,7 +7,7 @@
 - [DHKE server](./task1/L1/server_exchange/) | same as above but with a communication server inbetween that handles messages
 - [MitM Attack on DHKE](./task1/L2/MitM_attack_dhke.py) | Man-in-the-middle attack on DHKE implementation
 ### [task 2](./task2/)
-- [TSL Handshake](./task2/L3/TSL_handshake.py) | TSL handshake between a client and a server
+- [TLS Handshake](./task2/L3/TLS_handshake.py) | TSL handshake between a client and a server
 ### [task 3](./task3/)
 
 ###  _Author: Nikita P._
