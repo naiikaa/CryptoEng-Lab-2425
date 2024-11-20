@@ -123,26 +123,32 @@ def keySchedule2(nonce_c,X,nonce_s,Y,g_xy):
     k_2_s = hkdf_expand(hs, ServerKC)
     return k_2_c, k_2_s
 
+def printType(vars):
+    for var in vars:
+        print(type(var))
+
 def keySchedule3(nonce_c,X,nonce_s,Y,g_xy,sign,cert,mac_s):
+    #printType([nonce_c,X,nonce_s,Y,g_xy,sign,cert,mac_s])
     hs = deriveHS(g_xy)
     dHS = hkdf_expand(hs, hasher(b"DerivedHS").digest())
     MS = hkdf_expand(dHS, bytes([0] * 32))
-    ClientSKH = hasher((str(nonce_c)+X+str(nonce_s)+Y+str(sign)+str(cert)+str(mac_s)+"ClientEncK").encode()).digest()
-    ServerSKH = hasher((str(nonce_c)+X+str(nonce_s)+Y+str(sign)+str(cert)+str(mac_s)+"ServerEncK").encode()).digest()
+    ClientSKH = hasher((nonce_c+X+nonce_s+Y+sign+cert+mac_s+b"ClientEncK")).digest()
+    ServerSKH = hasher((nonce_c+X+nonce_s+Y+sign+cert+mac_s+b"ServerEncK")).digest()
     k_3_c = hkdf_expand(MS, ClientSKH)
     k_3_s = hkdf_expand(MS, ServerSKH)
     return k_3_c, k_3_s
 
 def serverSignature(sk,nonce_c,X,nonce_s,Y,cert):
-    sign = ecdsa_sign(hasher((str(nonce_c)+X+str(nonce_s)+Y+str(cert)).encode()).digest(),sk)
+    sign = ecdsa_sign(hasher((nonce_c+X+nonce_s+Y+cert[1])).digest(),sk)
     return sign
 
 def serverMac(k_2_s,nonce_c,X,nonce_s,Y,sign,cert):
-    mac_s = hmac_sign(k_2_s,hasher((str(nonce_c)+X+str(nonce_s)+Y+str(sign)+str(cert)+"ServerMAC").encode()).digest())
+
+    mac_s = hmac_sign(k_2_s,hasher(nonce_c+X+nonce_s+Y+sign+cert+b"ServerMAC").digest())
     return mac_s
 
 def clientMac(k_2_c,nonce_c,X,nonce_s,Y,sign,cert):
-    mac_c = hmac_sign(k_2_c,hasher((str(nonce_c)+X+str(nonce_s)+Y+str(sign)+str(cert)+"ClientMAC").encode()).digest())
+    mac_c = hmac_sign(k_2_c,hasher(nonce_c+X+nonce_s+Y+sign+cert+b"ClientMAC").digest())
     return mac_c
 
 # AES-GCM encryption
@@ -205,14 +211,15 @@ def main():
     sign_sk = SigningKey.generate(CURVE)
     sign_pk = sign_sk.get_verifying_key()
 
-    sign = serverSignature(sign_sk,nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),cert)
+    sign = serverSignature(sign_sk,nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),cert)
     
     k_2_c, k_2_s = keySchedule2(nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),y.exchange(ec.ECDH(), X))
-    mac_s = serverMac(k_2_s,nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),sign,cert)
-    k_3_c, k_3_s = keySchedule3(nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),y.exchange(ec.ECDH(), X),sign,cert,mac_s)
+    mac_s = serverMac(k_2_s,nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),sign,sign_ca)
+    k_3_c, k_3_s = keySchedule3(nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),y.exchange(ec.ECDH(), X),sign,sign_ca,mac_s)
 
     #6. Server sends cert,sign and mac to client encrypted with aes-gcm
-    iv, cipher, tag = aes_gcm_encrypt(k_1_s,str(str(cert)+'::'+str(sign)+'::'+str(mac_s)),Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo))
+    combinded = str((cert[1],sign,mac_s))
+    iv, cipher, tag = aes_gcm_encrypt(k_1_s, combinded,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo))
     print(b"Encrypted message from Server: "+iv,cipher,tag)
 
     #7. Client derives keys from scheduler 
@@ -226,30 +233,50 @@ def main():
     #8. Client decrypts the message from server
     message = aes_gcm_decrypt(k_1_s,iv,cipher,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),tag)
     print("Decrypted message from Server: "+message)
-    parts = message.split("::")
-    cert_2 = parts[0].split(',')[1]
+    parts = message.split(",")
+    print(len(parts))
+    
+    cert_2 = parts[0][1:]
+    cert_2 = cert_2[2:-1].encode().decode('unicode_escape').encode('ISO-8859-1')
+    
     sign_2 = parts[1]
-    mac_2 = parts[2]
+    sign_2 = sign_2[3:-1].encode().decode('unicode_escape').encode('ISO-8859-1')
+
+    mac_2 = parts[2][:-1]
+    mac_2 = mac_2[3:-1].encode().decode('unicode_escape').encode('ISO-8859-1')
+
 
     #9. Client verifies the signature and mac and cert
-    assert ecdsa_verify(cert_2.encode(),Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),pk_ca), "Certificate is not valid"
-    assert ecdsa_verify(sign_2.encode(),hasher(nonce_c+X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)+nonce_s+Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)).digest(),sign_pk), "Signature is not valid"
-    mac_s_c = serverMac(k_2_s,nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),sign_2,cert_2)
-    assert mac_2 == mac_s_c, "MAC is not valid"
+    
+    # Check certificate validity and sanity checks
+    assert sign_ca == cert_2, (sign_ca,cert_2)
+    assert ecdsa_verify(sign_ca,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),pk_ca), "Certificate is not valid"
+    assert ecdsa_verify(cert_2,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),pk_ca), "Certificate is not valid"
+    
+    # Check signature validity and sanity checks
+    assert sign == sign_2, (sign,sign_2)
+    hash = hasher(nonce_c+X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)+nonce_s+Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)+cert_2).digest()
+    assert ecdsa_verify(sign,hash,sign_pk), "Signature is not valid"
+    assert ecdsa_verify(sign_2,hash,sign_pk), "Signature is not valid"
+    # Check MAC validity and sanity checks
+    assert mac_2 == mac_s, (mac_2,mac_s)
+    mac_s_c = serverMac(k_2_s,nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),sign_2,cert_2)
+    assert mac_2 == mac_s_c, (mac_2,mac_s_c)
 
     #10. Client computes final keys
-    k_3_c_c, k_3_s_c = keySchedule3(nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),x.exchange(ec.ECDH(), Y),sign_2,cert_2,mac_2)
+    k_3_c_c, k_3_s_c = keySchedule3(nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),x.exchange(ec.ECDH(), Y),sign_2,cert_2,mac_2)
     assert k_3_c == k_3_c_c, "Shared secrets do not match for K3c!"
     assert k_3_s == k_3_s_c, "Shared secrets do not match! for K3s"
 
     #11. Client computes mac and sends it to the server
-    mac_c = clientMac(k_2_c,nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),sign_2,cert_2)
-    iv_mac, enc_mac_c,tag_mac = aes_gcm_encrypt(k_1_c_c,mac_c,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode())
-    print("Encrypted MAC from Client: "+iv_mac.decode(),enc_mac_c.decode(),tag_mac.decode())
+    mac_c = clientMac(k_2_c,nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),sign_2,cert_2)
+    iv_mac, enc_mac_c,tag_mac = aes_gcm_encrypt(k_1_c_c,str(mac_c),Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo))
+    print("Encrypted MAC from Client: ",iv_mac,enc_mac_c,tag_mac)
 
     #12. Server verifies the mac
-    mac_c_d = aes_gcm_decrypt(k_1_c,iv_mac,enc_mac_c,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),tag_mac)
-    assert mac_c == mac_c_d, "MAC is not valid"
+    mac_c_d = aes_gcm_decrypt(k_1_c,iv_mac,enc_mac_c,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),tag_mac)
+    mac_c_d = mac_c_d[2:-1].encode().decode('unicode_escape').encode('ISO-8859-1')
+    assert mac_c == mac_c_d, (mac_c,mac_c_d)
 
     print("TLS handshake completed successfully")
 
