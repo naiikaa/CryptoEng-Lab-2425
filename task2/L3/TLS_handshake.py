@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
 from hashlib import sha256
 from ecdsa import SigningKey, util # pip install ecdsa
-import ast
+import json
 
 # Use the curve P256, also known as SECP256R1, see https://neuromancer.sk/std/nist/P-256
 from ecdsa import NIST256p as CURVE  
@@ -218,7 +218,8 @@ def main():
     k_3_c, k_3_s = keySchedule3(nonce_c,X.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),nonce_s,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),y.exchange(ec.ECDH(), X),sign,sign_ca,mac_s)
 
     #6. Server sends cert,sign and mac to client encrypted with aes-gcm
-    combinded = str((cert[1],sign,mac_s))
+
+    combinded = json.dumps({"cert":str(sign_ca), "sign":str(sign), "mac":str(mac_s)})
     iv, cipher, tag = aes_gcm_encrypt(k_1_s, combinded,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo))
     print(b"Encrypted message from Server: "+iv,cipher,tag)
 
@@ -233,17 +234,18 @@ def main():
     #8. Client decrypts the message from server
     message = aes_gcm_decrypt(k_1_s,iv,cipher,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),tag)
     print("Decrypted message from Server: "+message)
-    parts = message.split(",")
-    print(len(parts))
     
-    cert_2 = parts[0][1:]
+    parts = json.loads(message)
+    
+    
+    cert_2 = parts["cert"]
     cert_2 = cert_2[2:-1].encode().decode('unicode_escape').encode('ISO-8859-1')
     
-    sign_2 = parts[1]
-    sign_2 = sign_2[3:-1].encode().decode('unicode_escape').encode('ISO-8859-1')
+    sign_2 = parts["sign"]
+    sign_2 = sign_2[2:-1].encode().decode('unicode_escape').encode('ISO-8859-1')
 
-    mac_2 = parts[2][:-1]
-    mac_2 = mac_2[3:-1].encode().decode('unicode_escape').encode('ISO-8859-1')
+    mac_2 = parts["mac"]
+    mac_2 = mac_2[2:-1].encode().decode('unicode_escape').encode('ISO-8859-1')
 
 
     #9. Client verifies the signature and mac and cert
