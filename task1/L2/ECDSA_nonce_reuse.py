@@ -128,7 +128,7 @@ def main():
         print("Signature with fixed nonce for the second message is valid")
 
     # Recover the private key using the nonce-reuse attack
-    k = nonce
+    k = ((h1 - h2) * invert(s_fixed - s_fixed2, order_CURVE)) % order_CURVE
     r_inv = invert(r_fixed, order_CURVE)
     private_key_recovered = ((s_fixed * k - h1) * r_inv) % order_CURVE
     print("\nRecovered Private Key (decimal):", private_key_recovered)
