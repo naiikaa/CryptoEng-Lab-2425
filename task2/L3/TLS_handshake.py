@@ -143,7 +143,6 @@ def serverSignature(sk,nonce_c,X,nonce_s,Y,cert):
     return sign
 
 def serverMac(k_2_s,nonce_c,X,nonce_s,Y,sign,cert):
-
     mac_s = hmac_sign(k_2_s,hasher(nonce_c+X+nonce_s+Y+sign+cert+b"ServerMAC").digest())
     return mac_s
 
