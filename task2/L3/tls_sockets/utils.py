@@ -136,15 +136,26 @@ def keySchedule3(nonce_c,X,nonce_s,Y,g_xy,sign,cert,mac_s):
     hs = deriveHS(g_xy)
     dHS = hkdf_expand(hs, hasher(b"DerivedHS").digest())
     MS = hkdf_expand(dHS, bytes([0] * 32))
-    ClientSKH = hasher((nonce_c+X+nonce_s+Y+sign+cert+mac_s+b"ClientEncK")).digest()
-    ServerSKH = hasher((nonce_c+X+nonce_s+Y+sign+cert+mac_s+b"ServerEncK")).digest()
+    ClientSKH = hasher((nonce_c+X+nonce_s+Y+sign+encode_correctly(cert)+mac_s+b"ClientEncK")).digest()
+    ServerSKH = hasher((nonce_c+X+nonce_s+Y+sign+encode_correctly(cert)+mac_s+b"ServerEncK")).digest()
     k_3_c = hkdf_expand(MS, ClientSKH)
     k_3_s = hkdf_expand(MS, ServerSKH)
     return k_3_c, k_3_s
 
 def serverSignature(sk,nonce_c,X,nonce_s,Y,cert):
-    sign = ecdsa_sign(hasher((nonce_c+X+nonce_s+Y+cert[1])).digest(),sk)
+    
+    sign = ecdsa_sign(hasher((nonce_c+X+nonce_s+Y+encode_correctly(cert))).digest(),sk)
+
     return sign
+
+def encode_correctly(data):
+    return data.encode().decode('unicode_escape').encode('ISO-8859-1')
+
+def decode_correctly(data):
+    return data.decode('unicode_escape')
+
+def str_correctly(data):
+    return str(data).decode('unicode_escape').encode('ISO-8859-1')
 
 def serverMac(k_2_s,nonce_c,X,nonce_s,Y,sign,cert):
     mac_s = hmac_sign(k_2_s,hasher(nonce_c+X+nonce_s+Y+sign+cert+b"ServerMAC").digest())

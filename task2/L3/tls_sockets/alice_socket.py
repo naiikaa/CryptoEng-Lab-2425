@@ -12,25 +12,25 @@ server_address = ('localhost', SERVER_PORT)
 
 secrect_key, public_key = generate_ecdh_key_pair()
 shared_key = None  
+Y = None
+nonce_c = os.urandom(64)
 
 def tls_hello(sock, public_key):
-    nonce = os.urandom(64)
-
     payload = {"target": "server",
-               "nonce": str(nonce),
+               "nonce": decode_correctly(nonce_c),
                 "msg": public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),
                 "source": IDENTITY,
-                "type": "tls"
+                "type": "tls-0"
     }
     msg = json.dumps(payload)
-    sock.sendto(msg.encode(), server_address)
+    sock.sendto(msg.encode('utf-8'), server_address) 
     
 
 def listen_for_messages(sock):
     while True:
-        message, addr = sock.recvfrom(1024)
+        message, addr = sock.recvfrom(1024*8)
         if message == b'':
-            continue
+            break
         #unpack message
         data = from_json(message)
         target_client = data['target']
@@ -40,10 +40,36 @@ def listen_for_messages(sock):
         nonce = data['nonce']
         if msg_type == 'msg':
             print(f"Received message: {message.decode()} from {addr}")
-        if msg_type == 'tls':
-            print(f"Received TLS message from {addr}")
+        if msg_type == 'tls-1':
+            Y = serialization.load_pem_public_key(msg.encode('utf-8'))
+            print(message)
+        if msg_type == 'tls-2':
+            print(message)
+
+            iv = encode_correctly(msg['iv'])
+            cipher = encode_correctly(msg['cipher'])
+            tag = msg['tag'].encode()
+            nonce = encode_correctly(nonce)
+            k_1_c, k_1_s = keySchedule1(secrect_key.exchange(ec.ECDH(), Y))
             
-        
+            k_2_c, k_2_s = keySchedule2(nonce_c,public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),nonce,Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode(),secrect_key.exchange(ec.ECDH(), Y))
+            decrypted_msg = aes_gcm_decrypt(k_1_c, iv,cipher, Y.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo),tag)
+            print(decrypted_msg)
+            
+            
+def sending_loop(conn_to_peer):
+    while True:
+        message = input("Enter message to send: ")
+        if message.lower() == 'exit':
+            break
+        target = input("Enter target client: ")
+        payload = {
+            "target": target,
+            "msg": message,
+            "source": IDENTITY
+        }
+        msg = json.dumps(payload)
+        conn_to_peer.sendto(msg.encode(), server_address)       
         
 
 
@@ -62,32 +88,14 @@ def main():
     listener_thread = threading.Thread(target=listen_for_messages, args=(conn_to_peer,))
     listener_thread.daemon = True
     listener_thread.start()
-
-
-    # Perform TLS handshake
-    while not tls_done:
-        try:
-            tls_hello(conn_to_peer, public_key)
-            time.sleep(2)
-        except:
-            print("Something went wrong during TLS handshake")
-            time.sleep(5)
-        
+     
+    tls_hello(conn_to_peer, public_key)
 
 
     # Send messages
+    #sending_loop(conn_to_peer)
     while True:
-        message = input("Enter message to send: ")
-        if message.lower() == 'exit':
-            break
-        target = input("Enter target client: ")
-        payload = {
-            "target": target,
-            "msg": message,
-            "source": IDENTITY
-        }
-        msg = json.dumps(payload)
-        conn_to_peer.sendto(msg.encode(), server_address)
-
+        pass
+    
 if __name__ == "__main__":
     main()
