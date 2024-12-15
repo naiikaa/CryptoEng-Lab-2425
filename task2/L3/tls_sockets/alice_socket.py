@@ -102,12 +102,13 @@ def main():
     # Try connecting to the server
     print(f"{IDENTITY}: Try connecting to SERVER...")
     conn_to_peer = None
-    while conn_to_peer is None:
+    while True:
         try:
             #check if socket already in use and close first
             conn_to_peer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             conn_to_peer.connect(server_address)
-        except ConnectionRefusedError:
+            break
+        except Exception as e:
             print(f"{IDENTITY}: Waiting for SERVER to be online...")
             time.sleep(2)
 
