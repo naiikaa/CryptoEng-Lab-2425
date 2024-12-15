@@ -9,12 +9,12 @@ from Cryptodome.Cipher import AES
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
 from hashlib import sha256
-from ecdsa import SigningKey, util, VerifyingKey # pip install ecdsa
+from ecdsa import SigningKey, util, VerifyingKey,ECDH # pip install ecdsa
 import json
 
 # Use the curve P256, also known as SECP256R1, see https://neuromancer.sk/std/nist/P-256
 from ecdsa import NIST256p as CURVE  
-
+ecdh = ECDH(curve=CURVE) 
 HASH_FUNC = hashes.SHA256() # Use SHA256
 hasher = sha256
 KEY_LEN = 32 # 32 bytes
