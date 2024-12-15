@@ -9,7 +9,7 @@ from Cryptodome.Cipher import AES
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
 from hashlib import sha256
-from ecdsa import SigningKey, util # pip install ecdsa
+from ecdsa import SigningKey, util, VerifyingKey # pip install ecdsa
 import json
 
 # Use the curve P256, also known as SECP256R1, see https://neuromancer.sk/std/nist/P-256
@@ -136,8 +136,8 @@ def keySchedule3(nonce_c,X,nonce_s,Y,g_xy,sign,cert,mac_s):
     hs = deriveHS(g_xy)
     dHS = hkdf_expand(hs, hasher(b"DerivedHS").digest())
     MS = hkdf_expand(dHS, bytes([0] * 32))
-    ClientSKH = hasher((nonce_c+X+nonce_s+Y+sign+encode_correctly(cert)+mac_s+b"ClientEncK")).digest()
-    ServerSKH = hasher((nonce_c+X+nonce_s+Y+sign+encode_correctly(cert)+mac_s+b"ServerEncK")).digest()
+    ClientSKH = hasher((nonce_c+X+nonce_s+Y+sign+cert+mac_s+b"ClientEncK")).digest()
+    ServerSKH = hasher((nonce_c+X+nonce_s+Y+sign+cert+mac_s+b"ServerEncK")).digest()
     k_3_c = hkdf_expand(MS, ClientSKH)
     k_3_s = hkdf_expand(MS, ServerSKH)
     return k_3_c, k_3_s

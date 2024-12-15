@@ -139,7 +139,7 @@ def keySchedule3(nonce_c,X,nonce_s,Y,g_xy,sign,cert,mac_s):
     return k_3_c, k_3_s
 
 def serverSignature(sk,nonce_c,X,nonce_s,Y,cert):
-    sign = ecdsa_sign(hasher((nonce_c+X+nonce_s+Y+cert[1])).digest(),sk)
+    sign = ecdsa_sign(hasher((nonce_c+X+nonce_s+Y+cert)).digest(),sk)
     return sign
 
 def serverMac(k_2_s,nonce_c,X,nonce_s,Y,sign,cert):
