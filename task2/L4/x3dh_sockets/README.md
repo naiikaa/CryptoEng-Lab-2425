@@ -3,10 +3,10 @@
 ## How to run the protocol
 
 ### Running the Server
-Open a new terminal and run the [Server.py](./Server.py)
+Open a new terminal and run the [Server.py](/task2/L4/x3dh_sockets/Server.py)
 
 ### Running the Clients
-1. Open two new terminals and run [Client.py](./Cleint.py) in both terminals
+1. Open two new terminals and run [Client.py](/task2/L4/x3dh_sockets/Client.py) in both terminals
 2. Enter two different names and register the users by typing `register`
 ```zsh
 #Terminal 1#
