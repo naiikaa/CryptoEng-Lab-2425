@@ -8,6 +8,8 @@
 - [Nonce-reuse attack on ECDSA](./task1/L2/ECDSA_nonce_reuse.py) | recovering the private key by performing the nonce reuse attack on ECDSA
 - [MitM Attack on DHKE](./task1/L2/MitM_attack_dhke.py) | Man-in-the-middle attack on DHKE implementation
 ### [task 2](./task2/)
-- [TLS Handshake](./task2/L3/TLS_handshake.py) | TSL handshake between a client and a server
+- [TLS Handshake](./task2/L3/tls_sockets/README.md) | TSL handshake between a client and a server
+- [X3DH](./task2/L4/x3dh_sockets/README.md) | X3DH between two clients through a server entity
+- [Registration ond Login](./task2/L7/README.md) | Registration and Login Process using hashed+salted passwords and a database
 ### [task 3](./task3/)
 
