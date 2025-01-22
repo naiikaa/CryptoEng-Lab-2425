@@ -5,16 +5,15 @@ import hashlib
 import os
 import json
 from utils import *
+import time
 
 
 class X3DHClient:
     def __init__(self, ):
         self.username = input("Enter your username: ")
-        self.server_address = ('localhost', 1717)
+        self.server_address = ('localhost', 7777)
         self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.context.load_verify_locations('server.crt')
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.ssock = self.context.wrap_socket(self.sock, server_hostname='localhost')
         self.ik ,self.IPK  = generate_server_ca_keys()
         self.sk ,self.SPK = generate_server_ca_keys()
         self.ok ,self.OPK = generate_server_ca_keys()
@@ -28,13 +27,14 @@ class X3DHClient:
                     self.connect_to_server()
                     break
                 except Exception as e:
-                    print(f"Failed to connect to server: {e}")
+                    print(f"Failed to connect to server.")
                     print("Retrying in 2 seconds...")
                     time.sleep(2)
 
     def connect_to_server(self):
         try:
-            self.ssock.connect(self.server_address)
+            self.sock = socket.create_connection(self.server_address)
+            self.ssock = self.context.wrap_socket(self.sock, server_hostname='localhost')
             print(f"Connected to server at {self.server_address}")
             #sending thread
             self.send_thread = threading.Thread(target=self.send_messages)
@@ -46,27 +46,26 @@ class X3DHClient:
             print(f"Failed to connect to server: {e}")
             self.ssock.close()
             
-    def compute_shared_x3dh_key_inital(self):
+    def compute_shared_x3dh_key_inital(self,target):
         ek , EPK = generate_server_ca_keys()
-        # DH1 = SPK ^ ik
+        # DH1 = SPK_B ^ ik
         ik_ecdh = ECDH(CURVE)
         ik_ecdh.load_private_key(self.ik)
-        ik_ecdh.load_received_public_key_pem(self.SPK.to_pem())
+        ik_ecdh.load_received_public_key_pem(bytes.fromhex(self.key_bundles[target]['SPK']))
         DH1 = ik_ecdh.generate_sharedsecret_bytes()
-        # DH2 = IPK ^ ek
+        # DH2 = IPK_B ^ ek
         ek_ecdh = ECDH(CURVE)
         ek_ecdh.load_private_key(ek)
-        ek_ecdh.load_received_public_key_pem(self.IPK.to_pem())
+        ek_ecdh.load_received_public_key_pem(bytes.fromhex(self.key_bundles[target]['IPK']))
         DH2 = ek_ecdh.generate_sharedsecret_bytes()
-        # DH3 = SPK ^ ek
-        ek_ecdh.load_received_public_key_pem(self.SPK.to_pem())
+        # DH3 = SPK_B ^ ek
+        ek_ecdh.load_received_public_key_pem(bytes.fromhex(self.key_bundles[target]['SPK']))
         DH3 = ek_ecdh.generate_sharedsecret_bytes()
-        # DH4 = OPK ^ ek
-        ek_ecdh.load_received_public_key_pem(self.OPK.to_pem())
+        # DH4 = OPK_B ^ ek
+        ek_ecdh.load_received_public_key_pem(bytes.fromhex(self.key_bundles[target]['OPK']))
         DH4 = ek_ecdh.generate_sharedsecret_bytes()
         # KDF(DH1,DH2,DH3,DH4)
         shared_key = hkdf_extract(salt=None, input_key_material=DH1+DH2+DH3+DH4)
-        assert shared_key == self.compute_shared_x3dh_key_reaction(IPK_A=self.IPK,EPK_A=EPK)
         
         return shared_key, ek, EPK
     
@@ -120,8 +119,9 @@ class X3DHClient:
         targets_key_bundle = json.loads(targets_key_bundle)
         self.key_bundles[target] = targets_key_bundle
         if self.verify_key_bundle(targets_key_bundle):
-            shared_key, ek, EPK = self.compute_shared_x3dh_key_inital()
+            shared_key, ek, EPK = self.compute_shared_x3dh_key_inital(target)
             self.x3dh_sessions_keys[target] = shared_key
+            print(shared_key, self.IPK.to_pem()+bytes.fromhex(targets_key_bundle['IPK']))
             iv, cipher, tag = aes_gcm_encrypt(shared_key, f"Hello {target}", self.IPK.to_pem()+bytes.fromhex(self.key_bundles[target]['IPK']))
             msg = {"iv": iv.hex(), "cipher": cipher.hex(), "tag": tag.hex()}
             msg = json.dumps(msg)
@@ -142,6 +142,7 @@ class X3DHClient:
             self.ssock.sendall(payload.encode('utf-8'))
     
     def handle_x3dh_reaction(self,res):
+        print(self.username)
         x3dh_link = json.loads(res['x3dh_link'])
         IPK_A = VerifyingKey.from_pem(bytes.fromhex(x3dh_link['IPK_A']))
         EPK_A = VerifyingKey.from_pem(bytes.fromhex(x3dh_link['EPK_A']))
@@ -151,8 +152,12 @@ class X3DHClient:
         cipher = bytes.fromhex(msg['cipher'])
         tag = bytes.fromhex(msg['tag'])
         shared_key = self.compute_shared_x3dh_key_reaction(IPK_A,EPK_A)
+        
         ad = IPK_A.to_pem()+self.IPK.to_pem()
-        if aes_gcm_decrypt(shared_key, iv, cipher, ad, tag) == f"Hello {self.username}":
+        print(shared_key, ad)
+        plaintext = aes_gcm_decrypt(shared_key, iv, cipher, ad, tag)   
+         
+        if plaintext == f"Hello {self.username}":
             print(f"X3DH Protocol with {res['username']} completed successfully")
         else:
             print(f"X3DH Protocol with {res['username']} failed")

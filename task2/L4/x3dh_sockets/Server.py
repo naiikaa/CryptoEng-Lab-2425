@@ -8,7 +8,7 @@ from utils import *
 
 class Server:
     def __init__(self):
-        self.server_address = ('localhost', 1717)
+        self.server_address = ('localhost', 7777)
         self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.context.load_cert_chain(certfile='server.crt', keyfile='server.key')
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

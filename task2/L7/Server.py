@@ -8,7 +8,7 @@ from utils import *
 
 class Server:
     def __init__(self):
-        self.server_address = ('localhost', 1717)
+        self.server_address = ('localhost', 7777)
         self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.context.load_cert_chain(certfile='server.crt', keyfile='server.key')
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -56,21 +56,26 @@ class Server:
                     print(f"Client sent me this hashed password: {check_pw}\n")
                     if check_pw == salted_hashed_password:
                         client_socket.sendall(b"Login successful")
-                        break
-                        print(f"{username}, Login successful!\n")
+                        return
                     else:
                         client_socket.sendall(b"Login failed")
                         if username in self.login_attempts:
                             self.login_attempts[username] += 1
                         else:
                             self.login_attempts[username] = 1
-                        break
+                        return
             
             client_socket.sendall(b"User not found. Register first!")
+    
     def user_already_exists(self,username,db):
         if db:
             for line in db:
-                stored_username, _, _ = line.split(":")
+                iv, cipher, tag = line.strip().split(":")
+                iv = bytes.fromhex(iv)
+                cipher = bytes.fromhex(cipher)
+                tag = bytes.fromhex(tag)
+                msg = aes_gcm_decrypt(bytes.fromhex(self.db_encryption_key), iv, cipher, b"", tag)
+                stored_username, salt, salted_hashed_password = msg.split(":")
                 if stored_username == username:
                     return True
         return False
@@ -82,14 +87,16 @@ class Server:
         with open("database.txt","r") as db:
             if self.user_already_exists(username,db):
                 client_socket.sendall(b"User already exists")
+                self.handle_login(client_socket,msg)
             else:
                 salt, salted_hashed_password = self.hash_password(password)
                 self.store_credentials(username,salt, salted_hashed_password)
                 client_socket.sendall(b"Registration successful")
+                self.handle_login(client_socket,msg)
     
     def handle_client(self, client_socket):
         try:
-            msg = client_socket.recv(2048).decode('utf-8')
+            msg = client_socket.recv(4096).decode('utf-8')
             msg = json.loads(msg)
             type = msg['type']
 
@@ -97,9 +104,12 @@ class Server:
                 self.handle_login(client_socket,msg)
             if type == "register":
                 self.handle_register(client_socket,msg)
+            if type == "message":
+                print(f"Message from {msg['username']}: {msg['message']}")
             
         except Exception as e:
-            print(f"Error handling client: {e}")
+            print(f"Error handling client: {e.with_traceback()}")
+            print(f"msg: {msg}")
         finally:
             client_socket.close()
 
