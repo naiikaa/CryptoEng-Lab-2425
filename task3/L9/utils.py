@@ -1,12 +1,13 @@
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.backends import default_backend
-from ecdsa import util # pip install ecdsa
+from ecdsa import util,ellipticcurve,curves
+from ecdsa.numbertheory import square_root_mod_prime # pip install ecdsa
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 from Cryptodome.Cipher import AES
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-import os
+import os, hashlib
 from hashlib import sha256
 from ecdsa import SigningKey, util # pip install ecdsa
 import json
@@ -17,6 +18,90 @@ from ecdsa import NIST256p as CURVE
 HASH_FUNC = hashes.SHA256() # Use SHA256
 hasher = sha256
 KEY_LEN = 32 # 32 bytes
+
+# Information about P256
+P256 = CURVE
+a = P256.curve.a()
+b = P256.curve.b()
+p = P256.curve.p()
+n = P256.order
+HASH = sha256
+
+def Create_P256_point(x, y):
+    P = ellipticcurve.Point(P256.curve, x, y)
+    return P
+
+def Is_P256_point(x,y):
+    # Since the cofactor is 1, so: is_EC_point = is_group_member
+    try:
+        ellipticcurve.Point(P256.curve, x, y)
+        return True
+    except:
+        return False
+
+def printable_P256_point(point):
+    x = point.x()
+    if x != None:
+        y = point.y()
+        str = f"({x}, {y})"
+    else:
+        str = "(0, 0)"
+    return str
+
+def GetY(x):
+    # Given x, compute y such that (x,y) is a point in P256. 
+    # If such y does not exist, return None
+    p = P256.curve.p()
+    rhs = (pow(x, 3, p) + (a * x) + b) % p
+    try:
+        y = square_root_mod_prime(rhs, p)
+        # Two solutions: y0 and p-y0
+        return (y, (p - y) % p)
+    except:
+        # No solution, (x,y) does not exist
+        return None
+
+
+def hash_to_curve(msg_bytes):
+    """Warning: This is not a secure implementation (or at least not "uniform") for hash_to_curve. This method is just for illustrating how the DH-OPRF works."""
+    """For a secure implementation, please refer to https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-13.html"""
+    # Input: msg, an arbitrary-length byte string.
+    # Output: P = (x,y), a point in P256.
+    h_pw = sha256(msg_bytes)
+    h_pw_digest = h_pw.digest()
+    first_byte = h_pw_digest[0]
+    msb_left = (first_byte & 0x80) != 0
+    msb_right = (first_byte & 0x80) != 1
+
+    h_pw_int = int.from_bytes(h_pw_digest,'big') % p
+
+    x = p - h_pw_int
+    while True:
+        y_int = GetY(x)
+        if y_int != None:
+            break
+        else:
+            x = x - 1 % p
+    y = y_int[msb_left]
+    P_left = Create_P256_point(x,y)
+
+    x = h_pw_int
+    while True:
+        y_int = GetY(x)
+        if y_int != None:
+            break
+        else:
+            x = x + 1 % p
+    y = y_int[msb_right]
+    P_right = Create_P256_point(x,y)
+
+    P = P_left + P_right
+
+    if x == h_pw_int:
+        return P_left
+    else:
+        return P
+
 
 def from_json(message):
     return json.loads(message)
