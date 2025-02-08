@@ -1,0 +1,11 @@
+[project]
+name = "cryptoeng-lab-2425"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "cryptography>=44.0.0",
+    "ecdsa>=0.19.0",
+    "pycryptodomex>=3.21.0",
+]

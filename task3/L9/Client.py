@@ -5,6 +5,7 @@ import json
 import hashlib
 from utils import *
 import time
+import utils 
 
 class Client:
     def __init__(self):
@@ -12,11 +13,14 @@ class Client:
         self.password = input("Enter your password: ")
         self.server_address = ('localhost', 7777)
         self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        self.context.load_verify_locations('server.crt')
+        self.context.load_verify_locations('./task3/L9/server.crt')
         self.ssock = None
         self.sock = None
         self.sk , self.pk = generate_server_ca_keys()
         self.rw = None
+        self.rw_key = None
+        self.key_info = {}
+        self.last_alpha = None
 
         while True:
             try:
@@ -49,10 +53,24 @@ class Client:
         message = json.dumps(payload)
         self.ssock.sendall(message.encode('utf-8'))
 
-    def handle_oprf_reaction(self,message):
+    def init_login(self):
+        print("Initiating OPRF login...")
+        self.last_alpha = int.from_bytes(os.urandom(32),'big') % utils.n
+        h_pw_alpha = (hash_to_curve(self.password.encode())*self.last_alpha).to_bytes()
+        payload = {"type": "login", "username": self.username, "h(pw)_alpha": h_pw_alpha.hex()}
+        message = json.dumps(payload)
+        self.ssock.sendall(message.encode('utf-8'))
+        print(f"Sent login request with payload: {payload}")
+
+    def handle_login_reaction(self,message):
         h_pw_alpha_salt = message['h(pw)_alpha_salt']
-        h_pw_salt = "hpw_alpha_salt hoch alpha hoch -1 "
-        self.rw = hasher(self.password + h_pw_salt).digest()
+        enc_client_key_info = json.loads(message['enc_client_key_info'])
+        h_pw_salt = h_pw_alpha_salt * inverse(self.last_alpha)
+        self.rw = hasher(self.password.encode() + h_pw_salt.to_bytes()).digest()
+        self.rw_key = hkdf_extract(None, self.rw)
+        self.key_info = aes_gcm_decrypt(self.rw_key, enc_client_key_info['iv'], enc_client_key_info['ciphertext'],b"", enc_client_key_info['tag'])
+        print(f"Key info: {self.key_info}")
+
 
     def handle_messages(self):
         while True:
@@ -68,9 +86,15 @@ class Client:
                 
                 if type == "server_message":
                     print(f"Server message: {message['message']}")
-                
-                if type == "oprf_reaction":
-                    self.handle_oprf_reaction(message)
+
+                    if message['message'] == "User registered successfully. Try logging in.":
+                        self.init_login()
+                        
+                    if message['message'] == "User already exists. Try logging in.":
+                        self.init_login()
+                    
+                if type == "login_reaction":
+                    self.handle_login_reaction(message)
                     
             except Exception as e:
                 import traceback

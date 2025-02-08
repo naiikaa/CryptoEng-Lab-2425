@@ -27,6 +27,9 @@ p = P256.curve.p()
 n = P256.order
 HASH = sha256
 
+def inverse(x: int) -> int:
+    return pow(x, -1, n)
+
 def Create_P256_point(x, y):
     P = ellipticcurve.Point(P256.curve, x, y)
     return P
