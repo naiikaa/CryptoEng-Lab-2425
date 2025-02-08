@@ -9,9 +9,9 @@ from Cryptodome.Cipher import AES
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os, hashlib
 from hashlib import sha256
-from ecdsa import SigningKey, util # pip install ecdsa
+from ecdsa import SigningKey,VerifyingKey, util # pip install ecdsa
 import json
-
+from ecdsa.ellipticcurve import Point
 # Use the curve P256, also known as SECP256R1, see https://neuromancer.sk/std/nist/P-256
 from ecdsa import NIST256p as CURVE  
 
@@ -26,6 +26,9 @@ b = P256.curve.b()
 p = P256.curve.p()
 n = P256.order
 HASH = sha256
+
+def point_from_value(value):
+    return Point.from_bytes(curve=P256.curve, data=value)
 
 def inverse(x: int) -> int:
     return pow(x, -1, n)
@@ -288,4 +291,5 @@ def aes_gcm_decrypt(key, iv, ciphertext, associated_data, tag):
 def generate_server_ca_keys():
     sk_ca = SigningKey.generate(CURVE)
     pk_ca = sk_ca.get_verifying_key()
+    
     return sk_ca, pk_ca
