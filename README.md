@@ -6,10 +6,11 @@
 - [DHKE sockets](./task1/L1/socket_exchange/) | sockets Alice and Bob exchanging public keys and computing the shared key
 - [DHKE server](./task1/L1/server_exchange/) | same as above but with a communication server inbetween that handles messages
 - [Nonce-reuse attack on ECDSA](./task1/L2/ECDSA_nonce_reuse.py) | recovering the private key by performing the nonce reuse attack on ECDSA
-- [MitM Attack on DHKE](./task1/L2/MitM_attack_dhke.py) | Man-in-the-middle attack on DHKE implementation
+- [MitM Attack on DHKE](./task1/L2/MitM_attack_dhke.py) | Man-in-the-middle attack on DHKE implementation.
 ### [task 2](./task2/)
 - [TLS Handshake](./task2/L3/tls_sockets/README.md) | TSL handshake between a client and a server
-- [X3DH](./task2/L4/x3dh_sockets/README.md) | X3DH between two clients through a server entity
-- [Registration ond Login](./task2/L7/README.md) | Registration and Login Process using hashed+salted passwords and a database
+- [X3DH](./task2/L4/x3dh_sockets/README.md) | X3DH between two clients through a server entity.
+- [Registration ond Login](./task2/L7/README.md) | Registration and Login Process using hashed+salted passwords and a database.
 ### [task 3](./task3/)
-
+- [SCRAM](./task3/L8/SCRAM.py) | Implementation of the SCRAM protocol in one file (no sockets).
+- [OPQAUE + HMQV with Key Confirmation](./task3/L9/README.md) | Implementation of the OPQAUE protocol using OPRF for login requests, AKE for symmetric key decription init and HMAC Key Confirmation at the end.
