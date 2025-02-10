@@ -18,8 +18,12 @@ class Server:
         print(f"Server listening on {self.server_address}")
         self.client_threads = []
         self.registered_clients = {}
-        self.user_keybundles = {}
         self.x3dh_forward_waitlist = {}
+        self.database_path = "./database.txt"
+        #check if database exists and create if not
+        if not os.path.exists(self.database_path):
+            with open(self.database_path,"w") as db:
+                pass
         
     def start(self):
         while True:
@@ -31,33 +35,45 @@ class Server:
 
     def handle_register(self, client_socket, msg):
         username = msg['username']
-        if username not in self.registered_clients:
+        with open(self.database_path,"r") as db:
+            for line in db:
+                line = json.loads(line)
+                if line['username'] == username:
+                    client_socket.sendall(json.dumps({"type": "keybundle_fetch", "message": "User was logged in.","key_bundle":line['key_bundle']}).encode('utf-8'))
+                    print(f"Username {username} was logged in.")
+                    self.registered_clients[username] = client_socket
+                    if username in self.x3dh_forward_waitlist:
+                        self.forward_x3dh_reaction(client_socket, self.x3dh_forward_waitlist[username])
+                        del self.x3dh_forward_waitlist[username]
+                    return
+                
+        with open(self.database_path,"a") as db:
             self.registered_clients[username] = client_socket
-            self.user_keybundles[username] = msg['key_bundle']
+            db.write(json.dumps({"username": username, "key_bundle": msg['key_bundle']}) + "\n")
             print(f"Registered {username} successfully with keybundle {msg['key_bundle']}")
-            client_socket.sendall(json.dumps({"type": "server_message", "message": "Register succesfull"}).encode('utf-8'))
-            if username in self.x3dh_forward_waitlist:
-                self.forward_x3dh_reaction(client_socket, self.x3dh_forward_waitlist[username])
-                del self.x3dh_forward_waitlist[username]
-        else:
-            client_socket.sendall(json.dumps({"type": "server_message", "message": "Register failed. Already registered"}).encode('utf-8'))
-            print(f"Username {username} tried to register again")
+            client_socket.sendall(json.dumps({"type": "server_message", "message": "Register succesfull and logged in."}).encode('utf-8'))
+        
+
+        
     
     def handle_x3dh(self, client_socket, msg):
         target = msg['target']
         username = msg['username']
-        if target in self.user_keybundles:
-            target_keybundle = self.user_keybundles.get(target)
-            payload = {"type": "x3dh", 
-                        "username": username,
-                        "target": target,
-                        "key_bundle": json.dumps(target_keybundle)}
-            res = json.dumps(payload)
-            client_socket.sendall(res.encode('utf-8'))
-            print(f"Sent keybundle of {target} to {msg['username']}")
-        else:
-            client_socket.sendall(json.dumps({"type": "server_message", "message": "X3DH Protocol. User not found."}).encode('utf-8'))
-            print(f"User {target} not found")
+        with open(self.database_path,"r") as db:
+             for line in db:
+                line = json.loads(line)
+                if line['username'] == target:
+                    target_keybundle = line['key_bundle']
+                    payload = {"type": "x3dh", 
+                                "username": username,
+                                "target": target,
+                                "key_bundle": json.dumps(target_keybundle)}
+                    res = json.dumps(payload)
+                    client_socket.sendall(res.encode('utf-8'))
+                    print(f"Sent keybundle of {target} to {msg['username']}")
+                    return
+        client_socket.sendall(json.dumps({"type": "server_message", "message": "X3DH Protocol. User not found."}).encode('utf-8'))
+        print(f"User {target} not found")
     
     def forward_x3dh_reaction(self, client_socket, msg):
         target = msg['target']

@@ -42,6 +42,8 @@ class X3DHClient:
             #listening thread
             self.listen_thread = threading.Thread(target=self.handle_messages)
             self.listen_thread.start()    
+
+            self.register()
         except Exception as e:
             print(f"Failed to connect to server: {e}")
             self.ssock.close()
@@ -161,6 +163,10 @@ class X3DHClient:
             print(f"X3DH Protocol with {res['username']} completed successfully")
         else:
             print(f"X3DH Protocol with {res['username']} failed")
+
+    def key_bundle_fetch(self, key_bundle):
+        print(f"Key bundle fetched: {key_bundle}")
+        self.key_bundles = key_bundle
         
     def verify_key_bundle(self, key_bundle):
         IPK = VerifyingKey.from_pem(bytes.fromhex(key_bundle['IPK']))
@@ -182,7 +188,7 @@ class X3DHClient:
                     if message == "exit":
                         self.ssock.close()
                         break
-                    elif message == "register":
+                    elif message == "register_depricated":
                         self.register()
                     elif message == "x3dh":
                         self.send_x3dh_start()                       
