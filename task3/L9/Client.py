@@ -134,12 +134,15 @@ class Client:
                         self.init_login()
                     
                 if type == "login_reaction":
+                    print(f"Received login reaction: {message}")
                     self.handle_login_reaction(message)
                 
                 if type == "AKE_reaction":
+                    print(f"Received AKE reaction: {message}")
                     self.handle_AKE_reaction(message)
 
                 if type == "key_confirmation_reaction":
+                    print(f"Received key confirmation reaction: {message}")
                     self.handle_key_confirmation_reaction(message)
 
             except Exception as e:
