@@ -14,9 +14,26 @@ class X3DHClient:
         self.server_address = ('localhost', 7777)
         self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.context.load_verify_locations('server.crt')
-        self.ik ,self.IPK  = generate_server_ca_keys()
-        self.sk ,self.SPK = generate_server_ca_keys()
-        self.ok ,self.OPK = generate_server_ca_keys()
+        self.pw_path = f"{self.username}.txt"
+        if not os.path.exists(self.pw_path):
+            with open(self.pw_path,"w") as db:
+                self.ik ,self.IPK  = generate_server_ca_keys()
+                self.sk ,self.SPK = generate_server_ca_keys()
+                self.ok ,self.OPK = generate_server_ca_keys()
+                db.write(json.dumps({"ik":self.ik.to_pem().hex(),"IPK":self.IPK.to_pem().hex(),
+                                     "sk":self.sk.to_pem().hex(),"SPK":self.SPK.to_pem().hex(),
+                                     "ok":self.ok.to_pem().hex(),"OPK":self.OPK.to_pem().hex()}) + "\n")
+        else:
+            with open(self.pw_path,"r") as db:
+                line = json.loads(db.readline())
+                self.ik = SigningKey.from_pem(bytes.fromhex(line['ik']))
+                self.IPK = VerifyingKey.from_pem(bytes.fromhex(line['IPK']))
+                self.sk = SigningKey.from_pem(bytes.fromhex(line['sk']))
+                self.SPK = VerifyingKey.from_pem(bytes.fromhex(line['SPK']))
+                self.ok = SigningKey.from_pem(bytes.fromhex(line['ok']))
+                self.OPK = VerifyingKey.from_pem(bytes.fromhex(line['OPK']))
+
+        
         self.key_bundle_sign = ecdsa_sign(message=self.SPK.to_pem(),
                                           private_key=self.ik,nonce=b"")
         self.key_bundles = {}

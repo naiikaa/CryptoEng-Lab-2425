@@ -11,12 +11,10 @@ Open a new terminal and run the [Server.py](/task2/L4/x3dh_sockets/Server.py)
 ```zsh
 #Terminal 1#
 Enter your username: Alice
-register
 ```
 ```zsh
 #Terminal 2#
 Enter your username: Bob
-register
 ```
 1. In of the terminals start the X3DH protocol by typing `x3dh`
 ```zsh
