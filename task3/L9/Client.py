@@ -58,7 +58,7 @@ class Client:
         print("Initiating OPRF login...")
         self.last_alpha = int.from_bytes(os.urandom(32),'big') % utils.n
         h_pw_alpha = (hash_to_curve(self.password.encode())*self.last_alpha).to_bytes()
-        payload = {"type": "login", "username": self.username, "h(pw)_alpha": h_pw_alpha.hex()}
+        payload = {"type": "login", "username": self.username, "h(pw)_alpha": h_pw_alpha.hex(), "ePKc": self.ePKc.to_string().hex()}
         message = json.dumps(payload)
         self.ssock.sendall(message.encode('utf-8'))
         print(f"Sent login request with payload: {payload}")
@@ -72,9 +72,20 @@ class Client:
         self.key_info = json.loads(aes_gcm_decrypt(self.rw_key, bytes.fromhex(enc_client_key_info['iv']), bytes.fromhex(enc_client_key_info['cipher']),b"", bytes.fromhex(enc_client_key_info['tag'])))
         print(f"Key info: {self.key_info}")
 
-        self.start_AKE()
+        ePKs = message['ePKs']
+        ePKs = VerifyingKey.from_string(bytes.fromhex(ePKs),curve=CURVE)
+        self.AEK_SK = self.HMQV_KClient(ePKs)
+        print(f"AKE completed. AEK_SK: {self.AEK_SK}")
+        K_s, K_c = hkdf_expand(self.AEK_SK,b"K_s"), hkdf_expand(self.AEK_SK,b"K_c")
+        print(f"K_s: {K_s}, K_c: {K_c}")
+        mac_c = hmac_sign(K_c, b"Client KC")
+        self.mac_s2 = hmac_sign(K_s, b"Server KC").hex()
+        payload = {"type": "key_confirmation","username":self.username ,"mac_c": mac_c.hex()}
+        message = json.dumps(payload)
+        self.ssock.sendall(message.encode('utf-8'))
 
     def start_AKE(self):
+        #not used due to RTT reduction
         payload = {"type": "start_AKE","username": self.username, "ePKc": self.ePKc.to_string().hex()}
         message = json.dumps(payload)
         self.ssock.sendall(message.encode('utf-8'))
@@ -91,17 +102,8 @@ class Client:
         return AEK_SK
 
     def handle_AKE_reaction(self,message):
-        ePKs = message['ePKs']
-        ePKs = VerifyingKey.from_string(bytes.fromhex(ePKs),curve=CURVE)
-        self.AEK_SK = self.HMQV_KClient(ePKs)
-        print(f"AKE completed. AEK_SK: {self.AEK_SK}")
-        K_s, K_c = hkdf_expand(self.AEK_SK,b"K_s"), hkdf_expand(self.AEK_SK,b"K_c")
-        print(f"K_s: {K_s}, K_c: {K_c}")
-        mac_c = hmac_sign(K_c, b"Client KC")
-        self.mac_s2 = hmac_sign(K_s, b"Server KC").hex()
-        payload = {"type": "key_confirmation","username":self.username ,"mac_c": mac_c.hex()}
-        message = json.dumps(payload)
-        self.ssock.sendall(message.encode('utf-8'))
+        #moved to handle_login_reaction due to RTT reduction
+        pass
 
     def handle_key_confirmation_reaction(self,message):
         mac_s = message['mac_s']
@@ -137,7 +139,7 @@ class Client:
                     print(f"Received login reaction: {message}")
                     self.handle_login_reaction(message)
                 
-                if type == "AKE_reaction":
+                if type == "AKE_reaction_depricated":
                     print(f"Received AKE reaction: {message}")
                     self.handle_AKE_reaction(message)
 

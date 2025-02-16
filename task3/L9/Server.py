@@ -53,9 +53,14 @@ class Server:
                     h_pw_alpha_s = h_pw_alpha * line['salt']
                     h_pw_alpha_salt = h_pw_alpha_s.to_bytes()
                     enc_client_key_info = line['enc_client_key_info']
-                    payload = {"type": "login_reaction", "h(pw)_alpha_salt": h_pw_alpha_salt.hex(), "enc_client_key_info": enc_client_key_info}
+                    payload = {"type": "login_reaction", "h(pw)_alpha_salt": h_pw_alpha_salt.hex(), "enc_client_key_info": enc_client_key_info, "ePKs":self.ePKs.to_string().hex()}
                     client_socket.sendall(json.dumps(payload).encode('utf-8'))
-                    
+                    ePKc = msg['ePKc']
+                    ePKc = VerifyingKey.from_string(bytes.fromhex(ePKc),curve=CURVE)
+                    payload = {"type":"AKE_reaction","ePKs":self.ePKs.to_string().hex()}
+                    client_socket.sendall(json.dumps(payload).encode('utf-8'))
+                    self.user_to_AEK_SK[username] = self.HMQV_KServer(ePKc,username)
+                    print(f"AEK_SK: {self.user_to_AEK_SK[username]}")
 
                     return    
             
@@ -116,14 +121,8 @@ class Server:
         return AEK_SK
 
     def handle_AKE(self, client_socket,msg):
-        username = msg['username']
-        ePKc = msg['ePKc']
-        #ePKc = point_from_value(bytes.fromhex(ePKc))
-        ePKc = VerifyingKey.from_string(bytes.fromhex(ePKc),curve=CURVE)
-        payload = {"type":"AKE_reaction","ePKs":self.ePKs.to_string().hex()}
-        client_socket.sendall(json.dumps(payload).encode('utf-8'))
-        self.user_to_AEK_SK[username] = self.HMQV_KServer(ePKc,username)
-        print(f"AEK_SK: {self.user_to_AEK_SK[username]}")
+        #moved to handle_login_reaction due to RTT reduction
+        pass        
 
     def handle_key_confirmation(self,client_socket,msg):
         username = msg['username']

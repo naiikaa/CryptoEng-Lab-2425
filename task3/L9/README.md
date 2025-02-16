@@ -115,3 +115,26 @@ def HMQV_KServer(self, ePKc:VerifyingKey, username:str):
 #terminal 2 | Client
 > Key confirmation successful!
 ```
+
+## Bonus: RTT of the implementation 
+The presented protocol from the lecture and the explanation above show an implementation that has the Round Trip Time (RTT) of 3. It meanse that the server and client exchange 6 messages in total (one back and forth is 1 RTT). The question that now rises is whether we can reduce this number.
+
+The answer ist yes! We can reduce the RTT to 2. 
+
+This is achieved by combining the OPRF and AKE messages. The involved keys and secrets are independent so they can be exchanged together without damaging the integrity of the protocol. The resulting messages of client and server would look like this. 
+
+```python
+#login + ake request
+{'type': 'login', 'username': <Your Name>, 'h(pw)_alpha': <h_pw_alpha>, 'ePKc': <ePKc>}
+```
+
+```python
+#login + ake server reaction
+{'type': 'login_reaction', 'h(pw)_alpha_salt': <h_pw_alpha_salt>, 
+'enc_client_key_info': {'iv': <iv>, 'cipher': <cipher>, 'tag': <tag>},
+'ePKs': <ePKs>}
+```
+
+We basically just extend the `login` messages with `ePKc` and `ePKs`.
+
+This saves us one message on both sides and reduces the RTT from 3 to 2.
